@@ -2,7 +2,7 @@ name: Scheduler Bot
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -15,7 +15,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 355
 
     steps:
       - name: Checkout
@@ -29,7 +29,7 @@ jobs:
       - name: Install deps
         run: pip install -r requirements.txt
 
-      - name: Run bot
+      - name: Run bot (loop mode)
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           ADMIN_ID: ${{ secrets.ADMIN_ID }}
@@ -37,9 +37,11 @@ jobs:
           SUPPORT_URL: ${{ secrets.SUPPORT_URL }}
           DEV_URL: ${{ secrets.DEV_URL }}
           PUBLISH_INTERVAL_HOURS: '12'
+          MAX_RUNTIME_SECONDS: '20700'
         run: python bot.py
 
       - name: Save state
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
