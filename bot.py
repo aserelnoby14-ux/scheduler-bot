@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import logging
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -10,10 +11,12 @@ log = logging.getLogger("bot")
 
 BOT_TOKEN = os.environ["BOT_TOKEN"].strip()
 ADMIN_ID = int(os.environ["ADMIN_ID"])
-CHANNEL_ID = os.environ.get("CHANNEL_ID").strip()
+CHANNEL_ID = os.environ.get("CHANNEL_ID", "").strip()
 SUPPORT_URL = os.environ.get("SUPPORT_URL", "https://example.com").strip()
 DEV_URL = os.environ.get("DEV_URL", "https://t.me/Asernoby23").strip()
 PUBLISH_INTERVAL_HOURS = int(os.environ.get("PUBLISH_INTERVAL_HOURS", "12"))
+MAX_RUNTIME_SECONDS = int(os.environ.get("MAX_RUNTIME_SECONDS", "21000"))  # 5h50m
+SAVE_EVERY_SECONDS = 60
 
 API = f"https://api.telegram.org/bot{BOT_TOKEN}"
 STATE_PATH = Path("data/state.json")
@@ -58,14 +61,20 @@ def tg(method, **params):
         return {"ok": False, "error": str(e)}
 
 
-def get_updates(offset):
+def get_updates(offset, timeout=50):
     try:
         r = requests.get(
             f"{API}/getUpdates",
-            params={"offset": offset, "timeout": 0, "allowed_updates": '["message"]'},
-            timeout=30,
+            params={
+                "offset": offset,
+                "timeout": timeout,
+                "allowed_updates": '["message"]',
+            },
+            timeout=timeout + 10,
         )
         return r.json().get("result", [])
+    except requests.exceptions.ReadTimeout:
+        return []
     except Exception:
         log.exception("getUpdates failed")
         return []
@@ -167,7 +176,8 @@ def handle_update(update, state):
             f"⏭️ النشر التالي: {next_str}\n"
             f"⏳ متبقي: {rem_str}\n"
             f"📋 في القائمة: <b>{len(state['queue'])}</b> ملف\n"
-            f"🎯 هدف النشر: <code>{PUBLISH_TARGET}</code>"
+            f"🎯 هدف النشر: <code>{PUBLISH_TARGET}</code>\n"
+            f"🟢 البوت شغّال (loop mode)"
         )
         return
 
@@ -244,24 +254,59 @@ def should_publish(state):
     return (datetime.now(timezone.utc) - last_dt) >= timedelta(hours=PUBLISH_INTERVAL_HOURS)
 
 
-def main():
+def run_loop():
     state = load_state()
+    start = time.time()
+    last_save = time.time()
+    last_pub_check = 0
 
-    updates = get_updates(state["offset"])
-    log.info("got %d updates", len(updates))
+    log.info("bot loop started (max runtime %ds)", MAX_RUNTIME_SECONDS)
 
-    for update in updates:
-        try:
-            handle_update(update, state)
-        except Exception:
-            log.exception("update %s failed", update.get("update_id"))
-        state["offset"] = update["update_id"] + 1
-        save_state(state)
+    while True:
+        elapsed = time.time() - start
+        if elapsed >= MAX_RUNTIME_SECONDS:
+            log.info("approaching GH Actions limit (%ds), exiting to restart in next cycle", int(elapsed))
+            save_state(state)
+            break
 
-    if should_publish(state):
-        log.info("interval reached, publishing next")
-        if publish_next(state):
-            reply(ADMIN_ID, "✅ تم نشر ملف جديد تلقائياً.")
+        # poll updates (long polling)
+        updates = get_updates(state["offset"], timeout=50)
+        if updates:
+            log.info("got %d updates", len(updates))
+            for update in updates:
+                try:
+                    handle_update(update, state)
+                except Exception:
+                    log.exception("update %s failed", update.get("update_id"))
+                state["offset"] = update["update_id"] + 1
+            save_state(state)
+            last_save = time.time()
+
+        # check publish schedule every 60 seconds
+        now = time.time()
+        if now - last_pub_check >= 60:
+            last_pub_check = now
+            if should_publish(state):
+                log.info("interval reached, publishing next")
+                if publish_next(state):
+                    reply(ADMIN_ID, "✅ تم نشر ملف جديد تلقائياً.")
+
+        # periodic save
+        if time.time() - last_save >= SAVE_EVERY_SECONDS:
+            save_state(state)
+            last_save = time.time()
+
+    log.info("bot loop ended cleanly")
+
+
+def main():
+    try:
+        run_loop()
+    except KeyboardInterrupt:
+        log.info("interrupted")
+    except Exception:
+        log.exception("fatal error in bot loop")
+        raise
 
 
 if __name__ == "__main__":
