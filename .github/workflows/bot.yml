@@ -1,0 +1,52 @@
+name: Scheduler Bot
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: scheduler-bot
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Run bot
+        env:
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          ADMIN_ID: ${{ secrets.ADMIN_ID }}
+          CHANNEL_ID: ${{ secrets.CHANNEL_ID }}
+          SUPPORT_URL: ${{ secrets.SUPPORT_URL }}
+          DEV_URL: ${{ secrets.DEV_URL }}
+          PUBLISH_INTERVAL_HOURS: '12'
+        run: python bot.py
+
+      - name: Save state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/state.json
+          if git diff --cached --quiet; then
+            echo "no state change"
+          else
+            git commit -m "chore: update state [skip ci]"
+            git push
+          fi
