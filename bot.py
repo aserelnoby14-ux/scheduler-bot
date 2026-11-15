@@ -8,7 +8,7 @@ import requests
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("bot")
 
-BOT_TOKEN = os.environ["8798016129:AAFsInsy6oeOQMeTLrcOtHl7RqgOYD4cfEc"].strip()
+BOT_TOKEN = os.environ["8798016129:AAEB2FaQ2UK7HBGbjOJS2QjOdNx3CewC-9k"].strip()
 ADMIN_ID = int(os.environ["7553598484"])
 CHANNEL_ID = os.environ.get("-1004442224181").strip()
 SUPPORT_URL = os.environ.get("SUPPORT_URL", "https://example.com").strip()
