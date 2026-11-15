@@ -10,7 +10,7 @@ log = logging.getLogger("bot")
 
 BOT_TOKEN = os.environ["8798016129:AAFsInsy6oeOQMeTLrcOtHl7RqgOYD4cfEc"].strip()
 ADMIN_ID = int(os.environ["7553598484"])
-CHANNEL_ID = os.environ.get("-1004442224181", "").strip()
+CHANNEL_ID = os.environ.get("-1004442224181").strip()
 SUPPORT_URL = os.environ.get("SUPPORT_URL", "https://example.com").strip()
 DEV_URL = os.environ.get("DEV_URL", "https://t.me/Asernoby23").strip()
 PUBLISH_INTERVAL_HOURS = int(os.environ.get("PUBLISH_INTERVAL_HOURS", "12"))
